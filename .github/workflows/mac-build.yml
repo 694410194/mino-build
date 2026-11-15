@@ -1,31 +1,103 @@
 name: mac-build
+# Mino macOS unsigned 发布构建——mino-deploy scripts/build-win-x64-release.sh 的 macOS 对应物。
+# 本仓是「公壳私芯」：公仓只为吃 GitHub 对 public repo 免费的 macOS runner 额度；
+# 产品源码不公开——deploy key（mino-agent 仓只读部署密钥）checkout 私仓备份
+# （BASE + format-patch），再与公开上游重建出产品树。secrets 只存私钥，日志全程掩码。
+# 构建环境口径与 win 脚本一致：ELECTRON_MIRROR / DSH_DESKTOP_UPDATE_CHANNEL=stable / MINO_PLUGINS_DIR。
+# unsigned mac 产物注意：package-target 的 localMacOSPackageEnvironment 写死
+# DSH_DESKTOP_APP_ID=com.deepseek.harness 且不写更新配置——产物是上游身份的未签名测试包，
+# 不是 stable 通道的 Mino 正式包；要 Mino 品牌+更新链需先补 unsigned 读 .env.macos 的口子。
 
-# Public runner shell for the private-source macOS build.
 on:
   workflow_dispatch:
+    inputs:
+      plugins_ref:
+        description: 'mino-plugins ref（分支或 commit）'
+        required: false
+        default: 'main'
 
 jobs:
-  verify-access:
+  mac-arm64-unsigned:
     runs-on: macos-15
+    timeout-minutes: 150
+    env:
+      ELECTRON_MIRROR: 'https://npmmirror.com/mirrors/electron/'
+      DSH_DESKTOP_UPDATE_CHANNEL: 'stable'
     steps:
-      - uses: actions/checkout@v4
+      - name: checkout product backup (deploy key)
+        uses: actions/checkout@v4
         with:
           repository: 694410194/mino-agent
           ssh-key: ${{ secrets.MAC_BUILD_SSH_KEY }}
           ssh-known-hosts: ${{ secrets.MAC_BUILD_KNOWN_HOSTS }}
           path: backup
 
-      - name: reconstruct source tree
+      - name: reconstruct product source (BASE + format-patch)
         run: |
           set -e
           BASE=$(cat backup/BASE)
-          echo "base commit: ${BASE:0:12}"
-          echo "patches: $(ls backup/patches | wc -l | tr -d ' ')"
           mkdir src && cd src
           git init -q .
           git remote add upstream https://github.com/deepseek-ai/deepseek-harness.git
           git fetch --depth=1 -q upstream "$BASE"
           git checkout -q FETCH_HEAD
           git -c user.name=wuyangji -c user.email=694410194@qq.com am -q ../backup/patches/*.patch
-          echo "reconstructed HEAD: $(git log -1 --format='%h %s')"
-          echo "tree files: $(git ls-files | wc -l | tr -d ' ')"
+          git remote add fork https://github.com/694410194/mino-agent.git
+          echo "reconstructed: $(git log -1 --format='%h %s') | $(git ls-files | wc -l | tr -d ' ') files"
+
+      - name: checkout mino-plugins
+        uses: actions/checkout@v4
+        with:
+          repository: 694410194/mino-plugins
+          ref: ${{ inputs.plugins_ref }}
+          path: mino-plugins
+
+      - uses: pnpm/action-setup@v4
+        with:
+          # 钉死 v11：lockfile 口径与仓根 packageManager 一致；v12 会静默跳过重算
+          version: 11.28.5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: |
+            src/pnpm-lock.yaml
+            mino-plugins/pnpm-lock.yaml
+
+      - name: install workspace deps
+        run: |
+          set -e
+          pnpm --dir src install --frozen-lockfile
+          pnpm --dir mino-plugins install --frozen-lockfile
+
+      - name: apply esbuild stdin patch
+        run: |
+          cd src
+          n=0
+          for f in node_modules/.pnpm/esbuild@*/node_modules/esbuild/lib/main.js; do
+            [ -f "$f" ] || continue
+            sed -i '' 's/input\.length > 1024 \* 1024)/input.length > 1024 * 1024 * 1024)/' "$f" && n=$((n+1))
+          done
+          echo "esbuild patched: $n file(s)"
+          [ "$n" -gt 0 ]
+
+      - name: package mac-arm64 unsigned
+        working-directory: src
+        env:
+          MINO_PLUGINS_DIR: ${{ github.workspace }}/mino-plugins
+        run: pnpm --dir apps/desktop run package:mac:arm64:unsigned
+
+      - name: verify artifacts
+        working-directory: src
+        run: |
+          ART=apps/desktop/.desktop-build/targets/mac-arm64/unsigned-artifacts
+          ls -lh "$ART"
+          ls "$ART"/*.dmg >/dev/null 2>&1 || { echo "no dmg in $ART"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mino-mac-arm64-unsigned-${{ github.run_id }}
+          path: src/apps/desktop/.desktop-build/targets/mac-arm64/unsigned-artifacts/*
+          retention-days: 30
+          if-no-files-found: error
