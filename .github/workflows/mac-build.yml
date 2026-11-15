@@ -82,6 +82,22 @@ jobs:
           echo "esbuild patched: $n file(s)"
           [ "$n" -gt 0 ]
 
+      - name: write .env.macos (non-secret release config)
+        # 有了 .env.macos，unsigned 构建走 loadDesktopPackageEnvironment：
+        # baby.mino.desktop appId + production 更新面（feed 嵌入 zip 产物）。
+        run: |
+          printf '%s\n' \
+            'DSH_DESKTOP_APP_ID=baby.mino.desktop' \
+            'DSH_DESKTOP_AUTO_UPDATE_ENV=production' \
+            'DOWNLOAD_TEST_ORIGIN=' \
+            'DOWNLOAD_TEST_RELEASE_ID=' \
+            'DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN=https://mino.baby' \
+            'DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN=https://mino.baby' \
+            "DSH_DESKTOP_MANDATORY_UPDATE_CONFIG='{}'" \
+            'DSH_DESKTOP_MACOS_PACK_CONCURRENCY=4' \
+            'DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL=3' \
+            > src/apps/desktop/.env.macos
+
       - name: render macOS icon at 1024
         # electron-builder mac 闸门 ≥512px；备份仓 patch 尚未带 1024 重渲染版，
         # 此处从 resources/icon-macos.svg 矢真理现渲，备份同步后此步自然幂等。
@@ -100,7 +116,8 @@ jobs:
         run: |
           ART=apps/desktop/.desktop-build/targets/mac-arm64/unsigned-artifacts
           ls -lh "$ART"
-          ls "$ART"/*.dmg >/dev/null 2>&1 || { echo "no dmg in $ART"; exit 1; }
+          ls "$ART"/*.dmg "$ART"/*.zip "$ART"/stable-mac.yml >/dev/null || { echo "artifacts incomplete in $ART"; exit 1; }
+          grep -q 'download.mino.baby/dsh-desk/feeds/mac-arm64' "$ART"/stable-mac.yml || { echo "stable-mac.yml missing production feed"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:
