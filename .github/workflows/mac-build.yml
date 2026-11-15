@@ -1,4 +1,6 @@
 name: mac-build
+
+# Public runner shell for the private-source macOS build.
 on:
   workflow_dispatch:
 
