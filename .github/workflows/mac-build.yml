@@ -1,0 +1,29 @@
+name: mac-build
+on:
+  workflow_dispatch:
+
+jobs:
+  verify-access:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 694410194/mino-agent
+          ssh-key: ${{ secrets.MAC_BUILD_SSH_KEY }}
+          ssh-known-hosts: ${{ secrets.MAC_BUILD_KNOWN_HOSTS }}
+          path: backup
+
+      - name: reconstruct source tree
+        run: |
+          set -e
+          BASE=$(cat backup/BASE)
+          echo "base commit: ${BASE:0:12}"
+          echo "patches: $(ls backup/patches | wc -l | tr -d ' ')"
+          mkdir src && cd src
+          git init -q .
+          git remote add upstream https://github.com/deepseek-ai/deepseek-harness.git
+          git fetch --depth=1 -q upstream "$BASE"
+          git checkout -q FETCH_HEAD
+          git -c user.name=wuyangji -c user.email=694410194@qq.com am -q ../backup/patches/*.patch
+          echo "reconstructed HEAD: $(git log -1 --format='%h %s')"
+          echo "tree files: $(git ls-files | wc -l | tr -d ' ')"
