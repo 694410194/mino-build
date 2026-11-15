@@ -82,6 +82,13 @@ jobs:
           echo "esbuild patched: $n file(s)"
           [ "$n" -gt 0 ]
 
+      - name: render macOS icon at 1024
+        # electron-builder mac 闸门 ≥512px；备份仓 patch 尚未带 1024 重渲染版，
+        # 此处从 resources/icon-macos.svg 矢真理现渲，备份同步后此步自然幂等。
+        working-directory: src/apps/desktop
+        run: |
+          node -e "import('sharp').then(async ({default:sharp})=>{const fs=await import('fs');const svg=fs.readFileSync('resources/icon-macos.svg');await sharp(svg,{density:72}).resize(1024,1024).png().toFile('resources/icon-macos.png');const b=fs.readFileSync('resources/icon-macos.png');console.log('icon-macos.png',b.readUInt32BE(16)+'x'+b.readUInt32BE(20));if(b.readUInt32BE(16)<512)process.exit(1)})"
+
       - name: package mac-arm64 unsigned
         working-directory: src
         env:
