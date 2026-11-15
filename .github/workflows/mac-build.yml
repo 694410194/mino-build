@@ -116,8 +116,12 @@ jobs:
         run: |
           ART=apps/desktop/.desktop-build/targets/mac-arm64/unsigned-artifacts
           ls -lh "$ART"
-          ls "$ART"/*.dmg "$ART"/*.zip "$ART"/stable-mac.yml >/dev/null || { echo "artifacts incomplete in $ART"; exit 1; }
-          grep -q 'download.mino.baby/dsh-desk/feeds/mac-arm64' "$ART"/stable-mac.yml || { echo "stable-mac.yml missing production feed"; exit 1; }
+          ls "$ART"/*.dmg "$ART"/*.zip "$ART"/*.blockmap "$ART"/stable-mac.yml >/dev/null || { echo "artifacts incomplete in $ART"; exit 1; }
+          grep -q '^version: ' "$ART"/stable-mac.yml || { echo "stable-mac.yml malformed"; exit 1; }
+          # feed URL 嵌在 app 内的 app-update.yml，不在通道清单里
+          unzip -p "$ART"/*.zip 'Mino.app/Contents/Resources/app-update.yml' 2>/dev/null \
+            | grep -q 'download.mino.baby/dsh-desk/feeds/mac-arm64' \
+            || { echo "app-update.yml missing production feed"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:
