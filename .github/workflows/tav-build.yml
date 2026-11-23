@@ -43,6 +43,8 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: tav
       - working-directory: tav
         run: cargo fmt --all --check
       - working-directory: tav
@@ -125,6 +127,8 @@ jobs:
           targets: wasm32-unknown-unknown
           components: clippy
       - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: tav
       - working-directory: tav
         run: cargo clippy -p tav-core -p tav-store-wasm -p tav-wasm-host -p tav-jsapi --target wasm32-unknown-unknown -- -D warnings
 
@@ -173,11 +177,14 @@ jobs:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: tav
 
       - name: install frontend dependencies
         working-directory: tav
         run: |
           npm --prefix ui ci
+          npm --prefix ui run build
           npm --prefix apps/desktop ci
 
       - uses: tauri-apps/tauri-action@v1
@@ -205,6 +212,8 @@ jobs:
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
       - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: tav
       - name: NDK env (runner image exposes ANDROID_NDK_LATEST_HOME)
         run: |
           echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
@@ -213,6 +222,7 @@ jobs:
         working-directory: tav
         run: |
           npm --prefix ui ci
+          npm --prefix ui run build
           npm --prefix apps/desktop ci
       - name: tauri android init
         working-directory: tav/apps/desktop
@@ -241,10 +251,13 @@ jobs:
         with:
           targets: aarch64-apple-ios-sim
       - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: tav
       - name: install frontend dependencies
         working-directory: tav
         run: |
           npm --prefix ui ci
+          npm --prefix ui run build
           npm --prefix apps/desktop ci
       - name: tauri ios init
         working-directory: tav/apps/desktop
