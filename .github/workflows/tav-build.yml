@@ -27,6 +27,16 @@ jobs:
           ssh-key: ${{ secrets.TAV_BUILD_SSH_KEY }}
           ssh-known-hosts: ${{ secrets.MAC_BUILD_KNOWN_HOSTS }}
           path: tav
+      - name: install dependencies（tav-host 链接 webkit）
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: build ui（host generate_context 需要 ui/dist）
+        working-directory: tav
+        run: npm --prefix ui ci && npm --prefix ui run build
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -36,8 +46,62 @@ jobs:
       - working-directory: tav
         run: |
           cargo fmt --all --check
-          cargo clippy -p tav-core --all-targets -- -D warnings
-          cargo test -p tav-core
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test --workspace
+
+  gates:
+    name: ai-gates / drift+arch+lint+secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 694410194/mino-tav
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.TAV_BUILD_SSH_KEY }}
+          ssh-known-hosts: ${{ secrets.MAC_BUILD_KNOWN_HOSTS }}
+          path: tav
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - working-directory: tav
+        run: |
+          bash scripts/verify-agents.sh
+          bash scripts/verify-arch.sh
+          npx --yes @ls-lint/ls-lint
+      - name: cargo deny（许可/漏洞/源）
+        working-directory: tav
+        run: |
+          cargo install cargo-deny --locked
+          cargo deny check
+      - name: gitleaks（密钥扫描）
+        env:
+          GITLEAKS_VERSION: "8.24.0"
+        working-directory: tav
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar xz gitleaks
+          ./gitleaks git --redact -v .
+
+  ui:
+    name: ui / svelte-check+build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 694410194/mino-tav
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.TAV_BUILD_SSH_KEY }}
+          ssh-known-hosts: ${{ secrets.MAC_BUILD_KNOWN_HOSTS }}
+          path: tav
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tav/ui/package-lock.json
+      - working-directory: tav
+        run: |
+          npm --prefix ui ci
+          npm --prefix ui run check
+          npm --prefix ui run build
 
   wasm:
     name: tav-core / wasm32-unknown-unknown
@@ -108,8 +172,10 @@ jobs:
           workspaces: tav
 
       - name: install frontend dependencies
-        working-directory: tav/apps/desktop
-        run: npm ci
+        working-directory: tav
+        run: |
+          npm --prefix ui ci
+          npm --prefix apps/desktop ci
 
       - uses: tauri-apps/tauri-action@v1
         with:
@@ -143,8 +209,10 @@ jobs:
           echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
       - name: install frontend dependencies
-        working-directory: tav/apps/desktop
-        run: npm ci
+        working-directory: tav
+        run: |
+          npm --prefix ui ci
+          npm --prefix apps/desktop ci
       - name: tauri android init
         working-directory: tav/apps/desktop
         run: npm run tauri -- android init
@@ -175,8 +243,10 @@ jobs:
         with:
           workspaces: tav
       - name: install frontend dependencies
-        working-directory: tav/apps/desktop
-        run: npm ci
+        working-directory: tav
+        run: |
+          npm --prefix ui ci
+          npm --prefix apps/desktop ci
       - name: tauri ios init
         working-directory: tav/apps/desktop
         run: npm run tauri -- ios init
