@@ -1,0 +1,185 @@
+name: tav-build
+# tav（mino-tav）全端构建验证——与 mac-build/win-build 同一公壳模式：
+# deploy key 只读 checkout 私仓 mino-tav，runner 上跑 rust 门禁 + wasm + 桌面三端 + android + ios。
+# 源仓 mino-tav 内 ci.yml 是同内容副本，private 计费恢复后可直接用；本文件是当前有效构建通道。
+# mobile 的 gen/（android init / ios init）在 runner 现场生成——init 需要 SDK/Xcode，不入库。
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'mino-tav ref（分支或 commit）'
+        required: false
+        default: 'main'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: rust / fmt+clippy+test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 694410194/mino-tav
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.TAV_BUILD_SSH_KEY }}
+          ssh-known-hosts: ${{ secrets.MAC_BUILD_KNOWN_HOSTS }}
+          path: tav
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: tav
+      - working-directory: tav
+        run: |
+          cargo fmt --all --check
+          cargo clippy -p tav-core --all-targets -- -D warnings
+          cargo test -p tav-core
+
+  wasm:
+    name: tav-core / wasm32-unknown-unknown
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 694410194/mino-tav
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.TAV_BUILD_SSH_KEY }}
+          ssh-known-hosts: ${{ secrets.MAC_BUILD_KNOWN_HOSTS }}
+          path: tav
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: tav
+      - working-directory: tav
+        run: cargo build -p tav-core --target wasm32-unknown-unknown --no-default-features
+
+  desktop:
+    name: desktop / ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-aarch64
+            platform: macos-latest
+            args: --target aarch64-apple-darwin
+          - name: macos-x86_64
+            platform: macos-latest
+            args: --target x86_64-apple-darwin
+          - name: ubuntu
+            platform: ubuntu-22.04
+            args: ""
+          - name: windows
+            platform: windows-latest
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 694410194/mino-tav
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.TAV_BUILD_SSH_KEY }}
+          ssh-known-hosts: ${{ secrets.MAC_BUILD_KNOWN_HOSTS }}
+          path: tav
+
+      - name: install dependencies (ubuntu only)
+        if: matrix.name == 'ubuntu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tav/apps/desktop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: tav
+
+      - name: install frontend dependencies
+        working-directory: tav/apps/desktop
+        run: npm ci
+
+      - uses: tauri-apps/tauri-action@v1
+        with:
+          projectPath: tav/apps/desktop
+          args: ${{ matrix.args }}
+
+  android:
+    name: android / apk debug
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 694410194/mino-tav
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.TAV_BUILD_SSH_KEY }}
+          ssh-known-hosts: ${{ secrets.MAC_BUILD_KNOWN_HOSTS }}
+          path: tav
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tav/apps/desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: tav
+      - name: NDK env (runner image exposes ANDROID_NDK_LATEST_HOME)
+        run: |
+          echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+      - name: install frontend dependencies
+        working-directory: tav/apps/desktop
+        run: npm ci
+      - name: tauri android init
+        working-directory: tav/apps/desktop
+        run: npm run tauri -- android init
+      - name: tauri android build (debug apk)
+        working-directory: tav/apps/desktop
+        run: npm run tauri -- android build --debug --apk
+
+  ios:
+    name: ios / simulator debug
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 694410194/mino-tav
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.TAV_BUILD_SSH_KEY }}
+          ssh-known-hosts: ${{ secrets.MAC_BUILD_KNOWN_HOSTS }}
+          path: tav
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tav/apps/desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios-sim
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: tav
+      - name: install frontend dependencies
+        working-directory: tav/apps/desktop
+        run: npm ci
+      - name: tauri ios init
+        working-directory: tav/apps/desktop
+        run: npm run tauri -- ios init
+      - name: tauri ios build (debug, simulator — unsigned)
+        working-directory: tav/apps/desktop
+        run: npm run tauri -- ios build --debug --target aarch64-sim
