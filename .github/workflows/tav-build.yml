@@ -1,6 +1,6 @@
 name: tav-build
 # tav（mino-tav）全端构建验证——与 mac-build/win-build 同一公壳模式：
-# deploy key 只读 checkout 私仓 mino-tav，runner 上跑 rust 门禁 + wasm + 桌面三端 + android + ios。
+# deploy key 只读 checkout 私仓 mino-tav 到 tav/ 前缀，runner 上跑 rust 门禁 + wasm + 桌面三端 + android + ios。
 # 源仓 mino-tav 内 ci.yml 是同内容副本，private 计费恢复后可直接用；本文件是当前有效构建通道。
 # mobile 的 gen/（android init / ios init）在 runner 现场生成——init 需要 SDK/Xcode，不入库。
 
@@ -33,7 +33,9 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: tav/ui/package-lock.json
       - name: build ui（host generate_context 需要 ui/dist）
         working-directory: tav
         run: npm --prefix ui ci && npm --prefix ui run build
@@ -41,16 +43,15 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: tav
       - working-directory: tav
-        run: |
-          cargo fmt --all --check
-          cargo clippy --workspace --all-targets -- -D warnings
-          cargo test --workspace
+        run: cargo fmt --all --check
+      - working-directory: tav
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - working-directory: tav
+        run: cargo test --workspace
 
   gates:
-    name: ai-gates / drift+arch+lint+secrets
+    name: ai-gates / drift+deny+secrets
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -60,23 +61,27 @@ jobs:
           ssh-key: ${{ secrets.TAV_BUILD_SSH_KEY }}
           ssh-known-hosts: ${{ secrets.MAC_BUILD_KNOWN_HOSTS }}
           path: tav
-      - uses: actions/setup-node@v4
+      - name: agents.md drift check
+        working-directory: tav
+        run: bash scripts/verify-agents.sh
+      - name: 架构边界门禁
+        working-directory: tav
+        run: bash scripts/verify-arch.sh
+      - name: ls-lint（文件/目录命名门禁）
+        uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: lts/*
       - working-directory: tav
-        run: |
-          bash scripts/verify-agents.sh
-          bash scripts/verify-arch.sh
-          npx --yes @ls-lint/ls-lint
-      - name: cargo deny（许可/漏洞/源）
+        run: npx --yes @ls-lint/ls-lint
+      - name: cargo deny（许可/漏洞/源/重复）
         working-directory: tav
         run: |
           cargo install cargo-deny --locked
           cargo deny check
       - name: gitleaks（密钥扫描）
+        working-directory: tav
         env:
           GITLEAKS_VERSION: "8.24.0"
-        working-directory: tav
         run: |
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar xz gitleaks
           ./gitleaks git --redact -v .
@@ -94,17 +99,18 @@ jobs:
           path: tav
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: lts/*
           cache: npm
           cache-dependency-path: tav/ui/package-lock.json
       - working-directory: tav
-        run: |
-          npm --prefix ui ci
-          npm --prefix ui run check
-          npm --prefix ui run build
+        run: npm --prefix ui ci
+      - working-directory: tav
+        run: npm --prefix ui run check
+      - working-directory: tav
+        run: npm --prefix ui run build
 
   wasm:
-    name: tav-core / wasm32-unknown-unknown
+    name: wasm32 / core+store+host
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -117,11 +123,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
+          components: clippy
       - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: tav
       - working-directory: tav
-        run: cargo build -p tav-core --target wasm32-unknown-unknown --no-default-features
+        run: cargo clippy -p tav-core -p tav-store-wasm -p tav-wasm-host -p tav-jsapi --target wasm32-unknown-unknown -- -D warnings
 
   desktop:
     name: desktop / ${{ matrix.name }}
@@ -159,7 +164,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: lts/*
           cache: npm
           cache-dependency-path: tav/apps/desktop/package-lock.json
 
@@ -168,8 +173,6 @@ jobs:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: tav
 
       - name: install frontend dependencies
         working-directory: tav
@@ -195,15 +198,13 @@ jobs:
           path: tav
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: lts/*
           cache: npm
           cache-dependency-path: tav/apps/desktop/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
       - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: tav
       - name: NDK env (runner image exposes ANDROID_NDK_LATEST_HOME)
         run: |
           echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
@@ -233,15 +234,13 @@ jobs:
           path: tav
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: lts/*
           cache: npm
           cache-dependency-path: tav/apps/desktop/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios-sim
       - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: tav
       - name: install frontend dependencies
         working-directory: tav
         run: |
