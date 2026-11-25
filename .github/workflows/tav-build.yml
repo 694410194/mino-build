@@ -63,6 +63,10 @@ jobs:
           ssh-key: ${{ secrets.TAV_BUILD_SSH_KEY }}
           ssh-known-hosts: ${{ secrets.MAC_BUILD_KNOWN_HOSTS }}
           path: tav
+      - name: actionlint workflow schema gate
+        run: |
+          curl -sL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz | tar xz actionlint
+          ./actionlint .github/workflows/*.yml
       - name: meta-gate 门禁完整性（防绕过，规则 15）
         working-directory: tav
         run: python3 scripts/verify_gates.py
