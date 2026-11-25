@@ -63,6 +63,9 @@ jobs:
           ssh-key: ${{ secrets.TAV_BUILD_SSH_KEY }}
           ssh-known-hosts: ${{ secrets.MAC_BUILD_KNOWN_HOSTS }}
           path: tav
+      - name: meta-gate 门禁完整性（防绕过，规则 15）
+        working-directory: tav
+        run: python3 scripts/verify_gates.py
       - name: agents.md drift check
         working-directory: tav
         run: bash scripts/verify-agents.sh
