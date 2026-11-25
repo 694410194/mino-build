@@ -11,6 +11,10 @@ on:
         description: 'mino-tav ref（分支或 commit）'
         required: false
         default: 'main'
+      release:
+        description: 'true=发布模式：desktop 产物签名+updater artifacts+创建 draft release（版本读仓内 tauri.conf.json）'
+        required: false
+        default: 'false'
 
 env:
   CARGO_TERM_COLOR: always
@@ -178,6 +182,23 @@ jobs:
       - working-directory: tav
         run: cargo clippy --lib -p tav-core -p tav-store-wasm -p tav-wasm-host -p tav-jsapi --target wasm32-unknown-unknown -- -D warnings
 
+  release-meta:
+    name: release-meta / 读仓内版本号（tag 单源）
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 694410194/mino-tav
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.TAV_BUILD_SSH_KEY }}
+          ssh-known-hosts: ${{ secrets.MAC_BUILD_KNOWN_HOSTS }}
+          path: tav
+      - id: v
+        working-directory: tav
+        run: echo "version=$(node -p "JSON.parse(require('fs').readFileSync('apps/desktop/src-tauri/tauri.conf.json','utf8')).version")" >> "$GITHUB_OUTPUT"
+
   desktop:
     name: desktop / ${{ matrix.name }}
     strategy:
@@ -197,6 +218,7 @@ jobs:
             platform: windows-latest
             args: ""
     runs-on: ${{ matrix.platform }}
+    needs: [release-meta]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -234,9 +256,16 @@ jobs:
           npm --prefix apps/desktop ci
 
       - uses: tauri-apps/tauri-action@v1
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: tav/apps/desktop
           args: ${{ matrix.args }}
+          tagName: ${{ inputs.release == 'true' && format('tav-v{0}', needs.release-meta.outputs.version) || '' }}
+          releaseName: ${{ inputs.release == 'true' && format('tav v{0}', needs.release-meta.outputs.version) || '' }}
+          releaseDraft: true
+          prerelease: false
 
       - name: upload bundles（安装包产物——release 实测物料）
         uses: actions/upload-artifact@v4
@@ -325,7 +354,7 @@ jobs:
   status:
     name: status / 回传 commit status 到 mino-tav（分支保护数据源）
     if: always()
-    needs: [rust, gates, ui, smoke, wasm, desktop, android, ios]
+    needs: [rust, gates, ui, smoke, wasm, desktop, android, ios, release-meta]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
