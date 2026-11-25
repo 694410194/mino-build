@@ -105,6 +105,9 @@ jobs:
       - name: crate dependency graph gate (ADR-0007)
         working-directory: tav
         run: python3 scripts/verify_crate_graph.py
+      - name: include 引用存活门禁（编译期死链静态闸）
+        working-directory: tav
+        run: python3 scripts/verify_includes.py
       - name: 债务标记门禁（硬规则 12）
         working-directory: tav
         run: bash scripts/verify-debt.sh
