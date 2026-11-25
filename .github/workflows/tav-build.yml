@@ -304,3 +304,32 @@ jobs:
       - name: tauri ios build (debug, simulator — unsigned)
         working-directory: tav/apps/desktop
         run: npm run tauri -- ios build --debug --target aarch64-sim
+
+  status:
+    name: status / 回传 commit status 到 mino-tav（分支保护数据源）
+    if: always()
+    needs: [rust, gates, ui, smoke, wasm, desktop, android, ios]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 694410194/mino-tav
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.TAV_BUILD_SSH_KEY }}
+          ssh-known-hosts: ${{ secrets.MAC_BUILD_KNOWN_HOSTS }}
+          path: tav
+      - name: post commit status
+        working-directory: tav
+        env:
+          GH_TOKEN: ${{ secrets.TAV_STATUS_TOKEN }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          SHA=$(git rev-parse HEAD)
+          if echo "$NEEDS_JSON" | jq -e '[.[] | select(.result != "success")] | length == 0' >/dev/null; then
+            STATE=success
+          else
+            STATE=failure
+          fi
+          echo "posting $STATE for $SHA"
+          gh api "repos/694410194/mino-tav/statuses/$SHA" -f state="$STATE" -f context=tav-build             -f target_url="$RUN_URL" -f description="mino-build 全端构建验证"
