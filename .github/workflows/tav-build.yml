@@ -69,6 +69,15 @@ jobs:
       - name: 架构边界门禁
         working-directory: tav
         run: bash scripts/verify-arch.sh
+      - name: 文档漂移门禁（ADR-0006）
+        working-directory: tav
+        run: bash scripts/verify-docs.sh
+      - name: 债务标记门禁（硬规则 12）
+        working-directory: tav
+        run: bash scripts/verify-debt.sh
+      - name: i18n 对账
+        working-directory: tav
+        run: python3 scripts/verify_i18n.py
       - name: ls-lint（文件/目录命名门禁）
         uses: actions/setup-node@v4
         with:
@@ -109,7 +118,34 @@ jobs:
       - working-directory: tav
         run: npm --prefix ui run check
       - working-directory: tav
+        run: npm --prefix ui run test
+      - working-directory: tav
         run: npm --prefix ui run build
+
+  smoke:
+    name: ui / browser smoke（wasm+IndexedDB）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 694410194/mino-tav
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.TAV_BUILD_SSH_KEY }}
+          ssh-known-hosts: ${{ secrets.MAC_BUILD_KNOWN_HOSTS }}
+          path: tav
+      - working-directory: tav
+        run: bash scripts/build-wasm.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: tav/ui/package-lock.json
+      - working-directory: tav
+        run: npm --prefix ui ci
+      - working-directory: tav
+        run: npm --prefix ui run build
+      - working-directory: tav
+        run: npm --prefix ui run smoke
 
   wasm:
     name: wasm32 / core+store+host
