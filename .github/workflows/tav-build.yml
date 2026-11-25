@@ -87,6 +87,15 @@ jobs:
       - name: 文档漂移门禁（ADR-0006）
         working-directory: tav
         run: bash scripts/verify-docs.sh
+      - name: workspace lint inheritance gate (ADR-0007)
+        working-directory: tav
+        run: python3 scripts/verify-lints.py
+      - name: rust file size ratchet gate (ADR-0007)
+        working-directory: tav
+        run: python3 scripts/verify-size.py
+      - name: crate dependency graph gate (ADR-0007)
+        working-directory: tav
+        run: python3 scripts/verify-crate-graph.py
       - name: 债务标记门禁（硬规则 12）
         working-directory: tav
         run: bash scripts/verify-debt.sh
