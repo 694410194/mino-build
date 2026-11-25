@@ -243,6 +243,7 @@ jobs:
             tav/target/release/bundle/
             tav/target/*/release/bundle/
           retention-days: 7
+          if-no-files-found: error
 
   android:
     name: android / apk debug
