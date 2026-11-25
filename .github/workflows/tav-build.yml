@@ -236,8 +236,8 @@ jobs:
         with:
           name: desktop-${{ matrix.name }}
           path: |
-            tav/apps/desktop/src-tauri/target/release/bundle/
-            tav/apps/desktop/src-tauri/target/*/release/bundle/
+            tav/target/release/bundle/
+            tav/target/*/release/bundle/
           retention-days: 7
 
   android:
