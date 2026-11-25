@@ -231,6 +231,15 @@ jobs:
           projectPath: tav/apps/desktop
           args: ${{ matrix.args }}
 
+      - name: upload bundles（安装包产物——release 实测物料）
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.name }}
+          path: |
+            tav/apps/desktop/src-tauri/target/release/bundle/
+            tav/apps/desktop/src-tauri/target/*/release/bundle/
+          retention-days: 7
+
   android:
     name: android / apk debug
     runs-on: ubuntu-latest
