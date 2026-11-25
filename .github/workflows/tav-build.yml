@@ -4,6 +4,10 @@ name: tav-build
 # 源仓 mino-tav 内 ci.yml 是同内容副本，private 计费恢复后可直接用；本文件是当前有效构建通道。
 # mobile 的 gen/（android init / ios init）在 runner 现场生成——init 需要 SDK/Xcode，不入库。
 
+# GITHUB_TOKEN 需 contents:write——tauri-action 建 draft release（Resource not accessible 实证）。
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
     inputs:
