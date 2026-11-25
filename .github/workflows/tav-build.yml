@@ -13,8 +13,9 @@ on:
         default: 'main'
       release:
         description: 'true=发布模式：desktop 产物签名+updater artifacts+创建 draft release（版本读仓内 tauri.conf.json）'
+        type: boolean
         required: false
-        default: 'false'
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -262,8 +263,8 @@ jobs:
         with:
           projectPath: tav/apps/desktop
           args: ${{ matrix.args }}
-          tagName: ${{ inputs.release == 'true' && format('tav-v{0}', needs.release-meta.outputs.version) || '' }}
-          releaseName: ${{ inputs.release == 'true' && format('tav v{0}', needs.release-meta.outputs.version) || '' }}
+          tagName: ${{ inputs.release && format('tav-v{0}', needs.release-meta.outputs.version) || '' }}
+          releaseName: ${{ inputs.release && format('tav v{0}', needs.release-meta.outputs.version) || '' }}
           releaseDraft: true
           prerelease: false
 
