@@ -30,7 +30,7 @@ jobs:
       - name: install dependencies（tav-host 链接 webkit）
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libasound2-dev
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
@@ -166,7 +166,7 @@ jobs:
         with:
           workspaces: tav
       - working-directory: tav
-        run: cargo clippy -p tav-core -p tav-store-wasm -p tav-wasm-host -p tav-jsapi --target wasm32-unknown-unknown -- -D warnings
+        run: cargo clippy --lib -p tav-core -p tav-store-wasm -p tav-wasm-host -p tav-jsapi --target wasm32-unknown-unknown -- -D warnings
 
   desktop:
     name: desktop / ${{ matrix.name }}
@@ -200,7 +200,7 @@ jobs:
         if: matrix.name == 'ubuntu'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libasound2-dev patchelf xdg-utils
 
       - uses: actions/setup-node@v4
         with:
