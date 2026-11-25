@@ -60,6 +60,11 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - working-directory: tav
         run: cargo test --workspace
+      - name: ST golden 对齐闸（prompt 捕获重录 + st_diff 硬失败——fixtures/st/README 分歧钉版）
+        working-directory: tav
+        run: |
+          cargo test -p tav-store --test prompt_capture
+          python3 scripts/st_diff.py --golden target/prompt-snapshots/ours-st-aligned.json fixtures/st/st-basic.json fixtures/st/st-golden-expect.json
 
   gates:
     name: ai-gates / drift+deny+secrets
