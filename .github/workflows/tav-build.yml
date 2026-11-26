@@ -114,6 +114,21 @@ jobs:
       - name: i18n 对账
         working-directory: tav
         run: python3 scripts/verify_i18n.py
+      - name: engine-api 方法契约闸（多文件 dispatch 扫描）
+        working-directory: tav
+        run: python3 scripts/verify_contract.py
+      - name: MCP network_guard 对账闸
+        working-directory: tav
+        run: python3 scripts/verify_mcp_guard.py
+      - name: 官方预置包完整性+原创性闸（P6）
+        working-directory: tav
+        run: python3 scripts/verify_official_data.py
+      - name: 移动 mic 权限声明面闸（P10）
+        working-directory: tav
+        run: bash scripts/verify-mobile-mic.sh
+      - name: release 链静态闸
+        working-directory: tav
+        run: python3 scripts/verify_release_chain.py ci/tav-build.yml
       - name: ls-lint（文件/目录命名门禁）
         uses: actions/setup-node@v4
         with:
