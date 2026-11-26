@@ -197,6 +197,11 @@ jobs:
         run: npm --prefix ui run build
       - working-directory: tav
         run: npm --prefix ui run smoke
+      # ST 扩展 golden harness（§9 机器闸——真 Chrome+真 corpus 实包装载断言）。
+      - working-directory: tav
+        run: bash scripts/fetch-st-ext-corpus.sh
+      - working-directory: tav
+        run: npm --prefix ui run smoke-st-ext
 
   wasm:
     name: wasm32 / core+store+host
