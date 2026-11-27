@@ -117,6 +117,9 @@ jobs:
       - name: i18n 对账
         working-directory: tav
         run: python3 scripts/verify_i18n.py
+      - name: UI 手搓棘轮门禁（ADR-0010）
+        working-directory: tav
+        run: python3 scripts/verify_ui_primitives.py
       - name: engine-api 方法契约闸（多文件 dispatch 扫描）
         working-directory: tav
         run: python3 scripts/verify_contract.py
@@ -200,6 +203,9 @@ jobs:
         run: npm --prefix ui run build
       - working-directory: tav
         run: npm --prefix ui run smoke
+      # stscript 命令语义实烟（本地 dist harness——check.sh 同源双侧接线，规则 13）。
+      - working-directory: tav
+        run: npm --prefix ui run smoke-stscript
       # ST 扩展 golden harness（§9 机器闸——真 Chrome+真 corpus 实包装载断言）。
       - working-directory: tav
         run: bash scripts/fetch-st-ext-corpus.sh
