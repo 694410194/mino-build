@@ -206,6 +206,9 @@ jobs:
       # stscript 命令语义实烟（本地 dist harness——check.sh 同源双侧接线，规则 13）。
       - working-directory: tav
         run: npm --prefix ui run smoke-stscript
+      # input/toast suspension e2e smoke (same dist harness; rule 13 dual wiring).
+      - working-directory: tav
+        run: npm --prefix ui run smoke-input
       # ST 扩展 golden harness（§9 机器闸——真 Chrome+真 corpus 实包装载断言）。
       - working-directory: tav
         run: bash scripts/fetch-st-ext-corpus.sh
